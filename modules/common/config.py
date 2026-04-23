@@ -20,7 +20,17 @@ WhatsApp_Business_Account_ID=os.getenv("WhatsApp_Business_Account_ID")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Database
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost/wabot_db")
+# Async database URL (must use asyncpg)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL and "postgresql://" in DATABASE_URL and "+asyncpg" not in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+
+# Synchronous database URL (for sync operations like nano-queue, migrations)
+SYNC_DATABASE_URL = os.getenv("SYNC_DATABASE_URL") or DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+#postgresql://postgres:Cogent3t@123@db.kwozhpijmrgzsmpfwutt.supabase.co:5432/postgres
+# Ensure the async URL is correct
+print(f"Async URL: {DATABASE_URL}")  # for debugging (remove later)
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 # App
