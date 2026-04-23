@@ -181,24 +181,21 @@ async def reset_password(
         raise HTTPException(400, "Invalid or expired token")
 
 # ========== TEMPORARY: Create super admin (remove after first use) ==========
-@router.post("/create-super-admin")
-async def create_super_admin(
-    secret: str,
+@router.post("/setup-first-admin")
+async def setup_first_admin(
+    email: str,
+    password: str,
     db: AsyncSession = Depends(get_db)
 ):
-    # Protect the endpoint with a secret (use a random string)
-    if secret != "myWhatsApp2026":
-        raise HTTPException(403, "Invalid secret")
-    
-    # Check if already exists
-    result = await db.execute(select(User).where(User.email == "admin@sahai.ai"))
-    if result.scalar_one_or_none():
-        return {"message": "Admin already exists"}
+    # Check if any user already exists
+    result = await db.execute(select(User))
+    if result.first():
+        raise HTTPException(403, "Setup already completed. Admin user exists.")
     
     # Create super admin
-    hashed = hash_password("admin123")  # uses your existing hash_password function
+    hashed = hash_password(password)
     new_user = User(
-        email="admin@sahai.ai",
+        email=email,
         password_hash=hashed,
         full_name="Super Admin",
         role="super_admin",
@@ -207,25 +204,4 @@ async def create_super_admin(
     )
     db.add(new_user)
     await db.commit()
-    return {"message": "Super admin created. Email: admin@sahai.ai, Password: admin123"}
-
-
-@router.post("/admin/setup", status_code=201)
-async def setup_super_admin(db: AsyncSession = Depends(get_db)):
-    # Check if admin already exists
-    existing_user = await db.execute(select(User).where(User.email == "admin@sahai.ai"))
-    if existing_user.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Super admin already exists")
-    # Create a new super admin
-    hashed_password = hash_password("admin123")
-    new_admin = User(
-        email="admin@sahai.ai",
-        password_hash=hashed_password,
-        full_name="Super Admin",
-        role="super_admin",
-        is_active=True,
-        email_verified=True
-    )
-    db.add(new_admin)
-    await db.commit()
-    return {"message": "Super admin created successfully"}
+    return {"message": "Super admin created successfully. Please login."}
