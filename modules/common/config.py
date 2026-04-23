@@ -19,18 +19,20 @@ WhatsApp_Business_Account_ID=os.getenv("WhatsApp_Business_Account_ID")
 # AI
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
+# Database
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost/wabot_db")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+
 # App
 APP_NAME = os.getenv("APP_NAME", "WAai Backend")
-
-
+QUEUE_BACKEND = os.getenv("QUEUE_BACKEND", "nano")  # 'celery' or 'nano'
+SYNC_DATABASE_URL = os.getenv("SYNC_DATABASE_URL", DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://"))
 # JWT
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
-# Database
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost/wabot_db")
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+
 
 
 # EMAIL SETTINGS

@@ -11,11 +11,12 @@ from modules.conversations.routes import router as conv_router
 from modules.customers.routes import router as customers_router   # <-- ADD THIS
 from modules.knowledge.routes import router as knowledge_router   # if you have it
 from modules.analytics.routes import router as analytics_router   # if you have it
-from modules.common.config import APP_NAME
+from modules.common.config import APP_NAME, QUEUE_BACKEND
 from modules.common.database import engine, Base
 from modules.common.logger import get_logger
 from modules.chat.routes import router as chat_router
 from modules.bookings.routes import router as bookings_router
+from modules.organizations.routes import router as organizations_router
 
 
 logger = get_logger(__name__)
@@ -45,6 +46,8 @@ app.include_router(knowledge_router)  # uncomment if exists
 app.include_router(analytics_router)  # uncomment if exists
 app.include_router(chat_router)
 app.include_router(bookings_router)
+app.include_router(organizations_router)
+
 
 @app.on_event("startup")
 async def startup():

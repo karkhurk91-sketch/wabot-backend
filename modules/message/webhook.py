@@ -1,14 +1,14 @@
-from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi import APIRouter, Request, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from modules.message.models import IncomingMessage as IncomingMessageModel
-from modules.queue.producer import enqueue_message
 from modules.common.config import VERIFY_TOKEN
 from modules.common.database import get_db
 from modules.common.models import Organization, Conversation, Message
+from modules.ai.processor import process_incoming_message
 from modules.common.logger import get_logger
 import uuid
 from datetime import datetime
+
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/webhook", tags=["WhatsApp"])
@@ -26,6 +26,7 @@ async def verify_webhook(
 @router.post("")
 async def receive_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
     body = await request.json()
@@ -83,15 +84,18 @@ async def receive_webhook(
             db.add(new_message)
             await db.commit()
 
-            # Queue for AI processing
-            enqueue_message({
-                "from_number": from_number,
-                "text": text,
-                "timestamp": timestamp,
-                "org_id": str(org),
-                "conversation_id": str(conv.id)
-            })
-            logger.info(f"Queued message from {from_number} for org {org}")
+            # Add processing task to background (no queue, no extra services)
+            background_tasks.add_task(
+                process_incoming_message,
+                {
+                    "from_number": from_number,
+                    "text": text,
+                    "timestamp": timestamp,
+                    "org_id": str(org),
+                    "conversation_id": str(conv.id)
+                }
+            )
+            logger.info(f"Scheduled processing for message from {from_number}")
 
     except Exception as e:
         logger.error(f"Error processing webhook: {e}")
