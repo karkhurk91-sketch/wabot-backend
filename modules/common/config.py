@@ -21,15 +21,28 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Database
 # Async database URL (must use asyncpg)
-DATABASE_URL = os.getenv("DATABASE_URL")
-if DATABASE_URL and "postgresql://" in DATABASE_URL and "+asyncpg" not in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+#DATABASE_URL = os.getenv("DATABASE_URL")
+#if DATABASE_URL and "postgresql://" in DATABASE_URL and "+asyncpg" not in DATABASE_URL:
+#    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
 
 # Synchronous database URL (for sync operations like nano-queue, migrations)
-SYNC_DATABASE_URL = os.getenv("SYNC_DATABASE_URL") or DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+#SYNC_DATABASE_URL = os.getenv("SYNC_DATABASE_URL") or DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 #postgresql://postgres:Cogent3t@123@db.kwozhpijmrgzsmpfwutt.supabase.co:5432/postgres
 # Ensure the async URL is correct
+
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL and "?sslmode=require" in DATABASE_URL:
+    parsed = urlparse(DATABASE_URL)
+    # Remove query string
+    cleaned = parsed._replace(query="")
+    DATABASE_URL_ASYNC = urlunparse(cleaned)
+else:
+    DATABASE_URL_ASYNC = DATABASE_URL
+
+SYNC_DATABASE_URL = os.getenv("SYNC_DATABASE_URL", DATABASE_URL_ASYNC.replace("postgresql+asyncpg://", "postgresql://"))
 print(f"Async URL: {DATABASE_URL}")  # for debugging (remove later)
+
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
