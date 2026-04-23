@@ -13,6 +13,8 @@ import secrets
 from datetime import timedelta
 from jose import jwt
 
+
+
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 # ---------- Pydantic models ----------
@@ -206,3 +208,24 @@ async def create_super_admin(
     db.add(new_user)
     await db.commit()
     return {"message": "Super admin created. Email: admin@sahai.ai, Password: admin123"}
+
+
+@app.post("/admin/setup", status_code=201)
+async def setup_super_admin(db: AsyncSession = Depends(get_db)):
+    # Check if admin already exists
+    existing_user = await db.execute(select(User).where(User.email == "admin@sahai.ai"))
+    if existing_user.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Super admin already exists")
+    # Create a new super admin
+    hashed_password = hash_password("admin123")
+    new_admin = User(
+        email="admin@sahai.ai",
+        password_hash=hashed_password,
+        full_name="Super Admin",
+        role="super_admin",
+        is_active=True,
+        email_verified=True
+    )
+    db.add(new_admin)
+    await db.commit()
+    return {"message": "Super admin created successfully"}
