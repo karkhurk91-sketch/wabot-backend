@@ -40,10 +40,6 @@ def get_lead_capture_enabled(org_id: str) -> bool:
         return True
 
 async def process_incoming_message(message: dict):
-    """
-    This async function processes the message and sends a reply.
-    It will be called as a background task (FastAPI supports async tasks).
-    """
     user_id = message["from_number"]
     user_text = message["text"]
     org_id = message.get("org_id")
@@ -54,10 +50,9 @@ async def process_incoming_message(message: dict):
     lead_capture_enabled = get_lead_capture_enabled(org_id)
 
     agent = get_agent_for_user_compat(user_id, org_id)
-    ai_response = agent.predict(user_text)  # This is synchronous, but it's fine
+    ai_response = agent.predict(user_text)
     logger.info(f"AI response: {ai_response[:200]}")
 
-    # Await the async send functions
     if recent:
         success = await send_whatsapp_text(to_number=user_id, text=ai_response)
     else:
@@ -71,5 +66,5 @@ async def process_incoming_message(message: dict):
     if lead_capture_enabled and org_id:
         keywords = ["buy", "price", "interested", "purchase", "cost", "quote", "want", "order"]
         if any(kw in user_text.lower() for kw in keywords):
-            await create_lead(org_id, user_id, user_text[:100])  # create_lead is async
+            await create_lead(org_id, user_id, user_text[:100])
             logger.info(f"Lead captured for {user_id}")
