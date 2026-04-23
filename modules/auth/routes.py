@@ -177,3 +177,32 @@ async def reset_password(
         return {"message": "Password updated. You can now log in."}
     except Exception:
         raise HTTPException(400, "Invalid or expired token")
+
+# ========== TEMPORARY: Create super admin (remove after first use) ==========
+@router.post("/create-super-admin")
+async def create_super_admin(
+    secret: str,
+    db: AsyncSession = Depends(get_db)
+):
+    # Protect the endpoint with a secret (use a random string)
+    if secret != "myWhatsApp2026":
+        raise HTTPException(403, "Invalid secret")
+    
+    # Check if already exists
+    result = await db.execute(select(User).where(User.email == "admin@sahai.ai"))
+    if result.scalar_one_or_none():
+        return {"message": "Admin already exists"}
+    
+    # Create super admin
+    hashed = hash_password("admin123")  # uses your existing hash_password function
+    new_user = User(
+        email="admin@sahai.ai",
+        password_hash=hashed,
+        full_name="Super Admin",
+        role="super_admin",
+        is_active=True,
+        email_verified=True
+    )
+    db.add(new_user)
+    await db.commit()
+    return {"message": "Super admin created. Email: admin@sahai.ai, Password: admin123"}
