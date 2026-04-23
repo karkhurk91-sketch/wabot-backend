@@ -210,7 +210,7 @@ async def create_super_admin(
     return {"message": "Super admin created. Email: admin@sahai.ai, Password: admin123"}
 
 
-@app.post("/admin/setup", status_code=201)
+@router.post("/admin/setup", status_code=201)
 async def setup_super_admin(db: AsyncSession = Depends(get_db)):
     # Check if admin already exists
     existing_user = await db.execute(select(User).where(User.email == "admin@sahai.ai"))
