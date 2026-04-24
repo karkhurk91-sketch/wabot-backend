@@ -11,7 +11,24 @@ DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
 _agent_cache = {}
 
+def get_primary_prompt_for_org(org_id: str) -> str:
+    with sync_engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT prompt_text FROM organization_prompts WHERE organization_id = :org_id AND is_primary = true"),
+            {"org_id": org_id}
+        )
+        row = result.fetchone()
+        if row:
+            return row[0]
+    return None
+
 def get_system_prompt_sync(org_id: str = None) -> str:
+    # First try to get the primary prompt from new table
+    if org_id:
+        primary = get_primary_prompt_for_org(org_id)
+        if primary:
+            return primary
+    # Fallback to old ai_configurations table
     with sync_engine.connect() as conn:
         if org_id:
             result = conn.execute(
@@ -27,7 +44,8 @@ def get_system_prompt_sync(org_id: str = None) -> str:
         row = result.fetchone()
         if row and row[0] and row[0].strip():
             return row[0]
-    return "You are a helpful AI assistant. Be friendly and efficient."
+    return "You are a helpful AI assistant for a small business. Answer concisely and politely."
+
 
 def get_industry_module(org_id: str):
     with sync_engine.connect() as conn:

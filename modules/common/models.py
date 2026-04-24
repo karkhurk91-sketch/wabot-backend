@@ -148,3 +148,15 @@ class Booking(Base):
     status = Column(String(20), default="confirmed")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class OrganizationPrompt(Base):
+    __tablename__ = "organization_prompts"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"))
+    name = Column(String(100), nullable=False)
+    prompt_text = Column(Text, nullable=False)
+    is_primary = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+

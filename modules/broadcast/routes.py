@@ -21,6 +21,7 @@ class TemplateCreate(BaseModel):
     media_url: Optional[str] = None
     meta_template_name: Optional[str] = None
     language_code: Optional[str] = "en_US"
+    category: str = "MARKETING"   # or "UTILITY"
 
 class BroadcastSend(BaseModel):
     template_id: UUID
@@ -57,7 +58,8 @@ async def create_template(data: TemplateCreate, db: AsyncSession = Depends(get_d
         media_url=data.media_url,
         status="pending",
         meta_template_name=data.meta_template_name,
-        language_code=data.language_code
+        language_code=data.language_code,
+        category=data.category 
     )
     db.add(template)
     await db.commit()
@@ -91,7 +93,8 @@ async def send_meta_broadcast(
         recipients=data.recipient_phone_numbers,
         template_name=data.template_name,
         language_code=data.language_code,
-        org_id=current_user["org_id"]
+        org_id=current_user["org_id"],
+        category=template.category
     )
 
     return {
@@ -101,12 +104,13 @@ async def send_meta_broadcast(
     }
 
 # ---------- Background worker for sending template messages ----------
-async def send_bulk_template_messages(recipients: list, template_name: str, language_code: str, org_id: str):
+async def send_bulk_template_messages(recipients: list, template_name: str, language_code: str, org_id: str, category: str):
     for phone in recipients:
         success = await send_whatsapp_template(
             to_number=phone,
             template_name=template_name,
-            language_code=language_code
+            language_code=language_code,
+            category=category
         )
         # org_id not used here
         await asyncio.sleep(0.5)

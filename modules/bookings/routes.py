@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
 
 @router.get("")
 async def list_bookings(
-    period: Optional[str] = Query("daily", regex="^(daily|weekly|monthly|yearly)$"),
+    period: str = Query("daily", pattern="^(daily|weekly|monthly|yearly)$"),
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user)
 ):

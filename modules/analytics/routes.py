@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 @router.get("/activity")
 async def get_activity(
-    period: str = Query("daily", regex="^(daily|weekly|monthly|yearly)$"),
+    period: str = Query("daily", pattern="^(daily|weekly|monthly|yearly)$"),
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user)
 ):

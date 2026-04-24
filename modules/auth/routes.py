@@ -205,3 +205,41 @@ async def setup_first_admin(
     db.add(new_user)
     await db.commit()
     return {"message": "Super admin created successfully. Please login."}
+
+
+# ========== SUPER ADMIN SIGNUP (one-time) ==========
+class SuperAdminSignup(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: str
+    phone: str   # full international number, e.g., +917290097178
+
+@router.post("/signup-super-admin")
+async def signup_super_admin(
+    req: SuperAdminSignup,
+    db: AsyncSession = Depends(get_db)
+):
+    # Check if any super admin already exists
+    result = await db.execute(select(User).where(User.role == "super_admin"))
+    if result.first():
+        raise HTTPException(400, "Super admin already exists. Please contact support.")
+    
+    # Check if email already used
+    result = await db.execute(select(User).where(User.email == req.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(400, "Email already registered")
+    
+    # Create super admin user
+    hashed = hash_password(req.password)
+    new_user = User(
+        email=req.email,
+        password_hash=hashed,
+        full_name=req.full_name,
+        role="super_admin",
+        is_active=True,
+        email_verified=True,
+        settings={"mobile": req.phone}   # store full phone number
+    )
+    db.add(new_user)
+    await db.commit()
+    return {"message": "Super admin created. Please login."}

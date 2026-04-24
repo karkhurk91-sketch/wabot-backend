@@ -17,6 +17,9 @@ from modules.common.logger import get_logger
 from modules.chat.routes import router as chat_router
 from modules.bookings.routes import router as bookings_router
 from modules.organizations.routes import router as organizations_router
+from modules.admin.prompts import router as admin_prompts_router
+from modules.chat.test_routes import router as admin_ai_test_router
+
 
 
 logger = get_logger(__name__)
@@ -47,7 +50,8 @@ app.include_router(analytics_router)  # uncomment if exists
 app.include_router(chat_router)
 app.include_router(bookings_router)
 app.include_router(organizations_router)
-
+app.include_router(admin_prompts_router)
+app.include_router(admin_ai_test_router)
 
 @app.on_event("startup")
 async def startup():

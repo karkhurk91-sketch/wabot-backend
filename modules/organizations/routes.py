@@ -88,3 +88,15 @@ async def change_password(data: ChangePassword, current_user = Depends(get_curre
     user.password_hash = new_hash
     await db.commit()
     return {"status": "password updated"}
+
+@router.get("/message-counts")
+async def get_message_counts(current_user = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    org_id = current_user.get("org_id")
+    if not org_id:
+        raise HTTPException(400, "No organization associated")
+    result = await db.execute(
+        text("SELECT marketing_message_count, utility_message_count FROM organizations WHERE id = :org_id"),
+        {"org_id": org_id}
+    )
+    row = result.fetchone()
+    return {"marketing": row[0] or 0, "utility": row[1] or 0}
