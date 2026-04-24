@@ -232,3 +232,37 @@ async def get_admin_stats(
         "totalConversations": total_conversations or 0,
         "totalLeads": total_leads or 0
     }
+
+# Add these imports
+from modules.common.models import User
+from pydantic import BaseModel
+
+class UserEmailUpdate(BaseModel):
+    email_verified: bool
+
+@router.get("/organizations/{org_id}/users")
+async def get_org_users(
+    org_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _ = Depends(get_current_super_admin)
+    ):
+    result = await db.execute(
+        select(User).where(User.organization_id == org_id)
+    )
+    users = result.scalars().all()
+    return [{"id": u.id, "email": u.email, "full_name": u.full_name, "role": u.role, "email_verified": u.email_verified} for u in users]
+
+@router.patch("/users/{user_id}/verify-email")
+async def verify_user_email(
+    user_id: UUID,
+    data: UserEmailUpdate,
+    db: AsyncSession = Depends(get_db),
+    _ = Depends(get_current_super_admin)
+    ):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(404, "User not found")
+    user.email_verified = data.email_verified
+    await db.commit()
+    return {"status": "updated"}
