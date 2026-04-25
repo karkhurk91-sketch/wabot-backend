@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from modules.common.database import get_db
-from modules.common.models import Organization, User
+from modules.common.models import Organization, User, OrganizationChannel
 from modules.auth.jwt import get_current_user, hash_password, verify_password
 from pydantic import BaseModel
 from uuid import UUID
@@ -29,6 +29,22 @@ async def create_organization(org: OrganizationCreate, db: AsyncSession = Depend
     await db.commit()
     await db.refresh(new_org)
     return new_org
+
+@router.get("/channels")
+async def get_org_channels(
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    org_id = current_user.get("org_id")
+    if not org_id:
+        raise HTTPException(400, "No organization associated")
+    result = await db.execute(
+        select(OrganizationChannel).where(
+            OrganizationChannel.organization_id == org_id,
+            OrganizationChannel.enabled == True
+        )
+    )
+    return result.scalars().all()
 
 @router.get("/{org_id}")
 async def get_organization(org_id: UUID, db: AsyncSession = Depends(get_db)):
@@ -100,3 +116,6 @@ async def get_message_counts(current_user = Depends(get_current_user), db: Async
     )
     row = result.fetchone()
     return {"marketing": row[0] or 0, "utility": row[1] or 0}
+# Add to modules/organizations/routes.py
+
+

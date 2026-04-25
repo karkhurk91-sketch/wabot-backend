@@ -19,6 +19,9 @@ from modules.bookings.routes import router as bookings_router
 from modules.organizations.routes import router as organizations_router
 from modules.admin.prompts import router as admin_prompts_router
 from modules.chat.test_routes import router as admin_ai_test_router
+from modules.blog.routes import router as blog_router
+from modules.messages.router import router as messages_router
+from modules.webhooks.router import router as webhooks_router
 
 
 
@@ -52,6 +55,9 @@ app.include_router(bookings_router)
 app.include_router(organizations_router)
 app.include_router(admin_prompts_router)
 app.include_router(admin_ai_test_router)
+app.include_router(blog_router)
+app.include_router(messages_router)
+app.include_router(webhooks_router)
 
 @app.on_event("startup")
 async def startup():

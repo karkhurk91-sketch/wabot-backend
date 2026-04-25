@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from modules.common.database import get_db
-from modules.common.models import BroadcastTemplate, BroadcastHistory, Customer, Organization
+from modules.common.models import BroadcastTemplate, BroadcastHistory, Customer, Organization, OrganizationChannel
 from modules.auth.jwt import get_current_user
 from modules.common.config import WHATSAPP_ACCESS_TOKEN
 from modules.message.sender import send_whatsapp_template
@@ -168,3 +168,186 @@ async def fetch_meta_templates(
             "components": t.get("components", []),
         })
     return templates
+# Add to modules/broadcast/routes.py
+
+from modules.messages.service import send_message
+from modules.common.models import Customer
+
+class MultiChannelBroadcast(BaseModel):
+    channel: str
+    message: dict           # { "type": "text", "content": "..." } or for templates
+    recipient_ids: List[UUID]   # customer IDs
+
+@router.post("/send-multichannel")
+async def send_multichannel_broadcast(
+    data: MultiChannelBroadcast,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    org_id = current_user["org_id"]
+    # Verify channel is enabled for this organization
+    chk = await db.execute(
+        select(OrganizationChannel).where(
+            OrganizationChannel.organization_id == org_id,
+            OrganizationChannel.channel_type == data.channel,
+            OrganizationChannel.enabled == True
+        )
+    )
+    if not chk.scalar_one_or_none():
+        raise HTTPException(400, f"Channel {data.channel} not enabled for this organization")
+
+    # Get recipient details (phone for WhatsApp, PSID for FB, chat_id for Telegram, email for Email)
+    customers = await db.execute(
+        select(Customer).where(
+            Customer.id.in_(data.recipient_ids),
+            Customer.organization_id == org_id,
+            Customer.deleted_at.is_(None)
+        )
+    )
+    recipients = customers.scalars().all()
+    if not recipients:
+        raise HTTPException(400, "No valid recipients")
+
+    # Background sending
+    async def send():
+        for cust in recipients:
+            # Determine recipient identifier based on channel
+            if data.channel == "whatsapp":
+                to = cust.phone_number
+            elif data.channel == "facebook":
+                # Need to store Facebook PSID in customers table (add column fb_psid)
+                to = cust.fb_psid   # you may need to add this column
+            elif data.channel == "instagram":
+                to = cust.instagram_id
+            elif data.channel == "telegram":
+                to = cust.telegram_chat_id
+            elif data.channel == "email":
+                to = cust.email
+            else:
+                continue
+            if not to:
+                continue
+            try:
+                await send_message(
+                    org_id=org_id,
+                    channel=data.channel,
+                    recipient=to,
+                    message=data.message
+                )
+                logger.info(f"Broadcast sent via {data.channel} to {cust.id}")
+            except Exception as e:
+                logger.error(f"Failed to send via {data.channel} to {cust.id}: {e}")
+            await asyncio.sleep(0.5)
+
+    background_tasks.add_task(send)
+    return {"status": "queued", "channel": data.channel, "recipient_count": len(recipients)}
+
+# ========== MULTI‑CHANNEL BROADCAST (keeps existing WhatsApp untouched) ==========
+class MultiChannelBroadcast(BaseModel):
+    channel: str
+    message: dict           # { "type": "text", "content": "..." }
+    recipient_ids: List[UUID]
+
+@router.post("/send-multichannel")
+async def send_multichannel_broadcast(
+    data: MultiChannelBroadcast,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    org_id = current_user["org_id"]
+    # Verify channel is enabled for this organization
+    chk = await db.execute(
+        select(OrganizationChannel).where(
+            OrganizationChannel.organization_id == org_id,
+            OrganizationChannel.channel_type == data.channel,
+            OrganizationChannel.enabled == True
+        )
+    )
+    if not chk.scalar_one_or_none():
+        raise HTTPException(400, f"Channel {data.channel} not enabled")
+
+    # Get recipients (customers)
+    customers = await db.execute(
+        select(Customer).where(
+            Customer.id.in_(data.recipient_ids),
+            Customer.organization_id == org_id,
+            Customer.deleted_at.is_(None)
+        )
+    )
+    recipients = customers.scalars().all()
+    if not recipients:
+        raise HTTPException(400, "No valid recipients")
+
+    async def send():
+        for cust in recipients:
+            # Determine recipient identifier based on channel
+            if data.channel == "facebook":
+                to = cust.fb_psid
+            elif data.channel == "instagram":
+                to = cust.instagram_id
+            elif data.channel == "telegram":
+                to = cust.telegram_chat_id
+            elif data.channel == "email":
+                to = cust.email
+            else:
+                continue
+            if not to:
+                continue
+            try:
+                await send_message(
+                    org_id=org_id,
+                    channel=data.channel,
+                    recipient=to,
+                    message=data.message
+                )
+                logger.info(f"Broadcast sent via {data.channel} to {cust.id}")
+            except Exception as e:
+                logger.error(f"Failed to send via {data.channel} to {cust.id}: {e}")
+            await asyncio.sleep(0.5)
+
+    background_tasks.add_task(send)
+    return {"status": "queued", "channel": data.channel, "recipient_count": len(recipients)}
+
+class SendMetaTemplate(BaseModel):
+    template_name: str
+    language_code: str = "en_US"
+    recipient_ids: List[UUID]
+
+@router.post("/send-meta-template")
+async def send_meta_template_broadcast(
+    data: SendMetaTemplate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    org_id = current_user["org_id"]
+    # Get recipients (customers)
+    customers = await db.execute(
+        select(Customer).where(
+            Customer.id.in_(data.recipient_ids),
+            Customer.organization_id == org_id,
+            Customer.deleted_at.is_(None)
+        )
+    )
+    recipients = customers.scalars().all()
+    if not recipients:
+        raise HTTPException(400, "No valid recipients")
+
+    async def send():
+        for cust in recipients:
+            try:
+                await send_whatsapp_template(
+                    to_number=cust.phone_number,
+                    template_name=data.template_name,
+                    language_code=data.language_code,
+                    org_id=org_id,
+                    category="MARKETING"
+                )
+            except Exception as e:
+                logger.error(f"Failed to send to {cust.phone_number}: {e}")
+            await asyncio.sleep(0.5)
+
+    background_tasks.add_task(send)
+    return {"status": "queued", "recipient_count": len(recipients)}

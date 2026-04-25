@@ -266,3 +266,104 @@ async def verify_user_email(
     user.email_verified = data.email_verified
     await db.commit()
     return {"status": "updated"}
+
+class ChannelUpdate(BaseModel):
+    enabled: bool
+    config: dict = {}
+
+@router.get("/organizations/{org_id}/channels")
+async def list_org_channels(org_id: UUID, db: AsyncSession = Depends(get_db), _ = Depends(get_current_super_admin)):
+    from modules.common.models import OrganizationChannel
+    result = await db.execute(select(OrganizationChannel).where(OrganizationChannel.organization_id == org_id))
+    return result.scalars().all()
+
+@router.put("/organizations/{org_id}/channels/{channel_type}")
+async def update_org_channel(
+    org_id: UUID,
+    channel_type: str,
+    data: ChannelUpdate,
+    db: AsyncSession = Depends(get_db),
+    _ = Depends(get_current_super_admin)
+):
+    from modules.common.models import OrganizationChannel
+    stmt = select(OrganizationChannel).where(
+        OrganizationChannel.organization_id == org_id,
+        OrganizationChannel.channel_type == channel_type
+    )
+    result = await db.execute(stmt)
+    channel = result.scalar_one_or_none()
+    if not channel:
+        channel = OrganizationChannel(organization_id=org_id, channel_type=channel_type)
+        db.add(channel)
+    channel.enabled = data.enabled
+    channel.config = data.config
+    await db.commit()
+    return channel
+
+
+# Add to modules/admin/routes.py (append at the end)
+
+from pydantic import BaseModel
+from modules.common.models import OrganizationChannel
+
+class ChannelConfigUpdate(BaseModel):
+    enabled: bool = True
+    config: dict = {}
+
+@router.get("/organizations/{org_id}/channels")
+async def list_org_channels(
+    org_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _ = Depends(get_current_super_admin)
+):
+    result = await db.execute(
+        select(OrganizationChannel).where(OrganizationChannel.organization_id == org_id)
+    )
+    channels = result.scalars().all()
+    return channels
+
+@router.post("/organizations/{org_id}/channels/{channel_type}")
+async def create_or_update_channel(
+    org_id: UUID,
+    channel_type: str,
+    data: ChannelConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    _ = Depends(get_current_super_admin)
+):
+    # Check if channel exists
+    stmt = select(OrganizationChannel).where(
+        OrganizationChannel.organization_id == org_id,
+        OrganizationChannel.channel_type == channel_type
+    )
+    result = await db.execute(stmt)
+    channel = result.scalar_one_or_none()
+    if not channel:
+        channel = OrganizationChannel(
+            organization_id=org_id,
+            channel_type=channel_type,
+            enabled=data.enabled,
+            config=data.config
+        )
+        db.add(channel)
+    else:
+        channel.enabled = data.enabled
+        channel.config = data.config
+    await db.commit()
+    await db.refresh(channel)
+    return channel
+
+@router.delete("/organizations/{org_id}/channels/{channel_type}")
+async def delete_channel(
+    org_id: UUID,
+    channel_type: str,
+    db: AsyncSession = Depends(get_db),
+    _ = Depends(get_current_super_admin)
+):
+    await db.execute(
+        delete(OrganizationChannel).where(
+            OrganizationChannel.organization_id == org_id,
+            OrganizationChannel.channel_type == channel_type
+        )
+    )
+    await db.commit()
+    return {"status": "deleted"}

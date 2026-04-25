@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, JSON, Text, Float, ForeignKey, Index, Date, Time
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, JSON, Text, Float, ForeignKey, Index, Date, Time, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.sql import func
 from modules.common.database import Base
@@ -42,6 +42,9 @@ class Customer(Base):
     phone_number = Column(String(20), nullable=False)
     name = Column(String(255))
     email = Column(String(255))
+    fb_psid = Column(String(255), nullable=True)
+    instagram_id = Column(String(255), nullable=True)
+    telegram_chat_id = Column(String(255), nullable=True)
     notes = Column(Text)
     deleted_at = Column(DateTime(timezone=True))  # soft delete
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -158,5 +161,29 @@ class OrganizationPrompt(Base):
     is_primary = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+# ========== BLOG MODEL ==========
+class Blog(Base):
+    __tablename__ = "blogs"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String(255), nullable=False)
+    slug = Column(String(255), nullable=False, unique=True)
+    description = Column(String(500))
+    content = Column(Text, nullable=False)
+    image_url = Column(String(500))
+    published = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class OrganizationChannel(Base):
+    __tablename__ = "organization_channels"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"))
+    channel_type = Column(String(50), nullable=False)
+    enabled = Column(Boolean, default=False)
+    config = Column(JSON, default={})
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    __table_args__ = (UniqueConstraint('organization_id', 'channel_type'),)
 
 

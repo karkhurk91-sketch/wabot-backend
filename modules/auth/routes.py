@@ -212,7 +212,7 @@ class SuperAdminSignup(BaseModel):
     email: EmailStr
     password: str
     full_name: str
-    phone: str   # full international number, e.g., +917290097178
+    phone: str   
 
 @router.post("/signup-super-admin")
 async def signup_super_admin(
