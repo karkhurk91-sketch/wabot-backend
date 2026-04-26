@@ -1,3 +1,4 @@
+# modules/ai/industries/restaurant/intent.py
 import re
 from difflib import get_close_matches
 from ..base import BaseIntentClassifier
@@ -5,7 +6,7 @@ from ..base import BaseIntentClassifier
 class RestaurantIntentClassifier(BaseIntentClassifier):
     def __init__(self):
         self.intents = {
-            "greeting": ["hi", "hello", "namaste", "hey", "good morning", "good evening"],
+            "greeting": ["hi", "hello", "namaste", "hey"],
             "order": ["order", "want", "need", "chahiye", "lana", "khana", "mango", "le lo"],
             "menu": ["menu", "kya hai", "options", "dish", "items", "show", "dikhao", "list"],
             "price": ["price", "kitne", "cost", "rate", "paise", "daam", "kitna"],
@@ -15,7 +16,6 @@ class RestaurantIntentClassifier(BaseIntentClassifier):
             "remove_item": ["remove", "hatao", "delete", "nikalo"],
             "ask_bill": ["bill", "total", "kitna hua", "pay", "payment", "check"],
         }
-        # Menu items with prices (can be extended or loaded from DB)
         self.menu_items = {
             "paneer butter masala": 250,
             "butter chicken": 320,
@@ -43,22 +43,29 @@ class RestaurantIntentClassifier(BaseIntentClassifier):
     def extract_entities(self, text: str) -> dict:
         entities = {}
         text_lower = text.lower()
-        # Extract dish name (exact or fuzzy match)
+        # Extract dish name – exact match first, then fuzzy
+        found = None
         for dish in self.item_names:
             if dish in text_lower:
-                entities["item"] = dish
+                found = dish
                 break
-        else:
+        if not found:
             words = text_lower.split()
             for word in words:
                 match = get_close_matches(word, self.item_names, n=1, cutoff=0.7)
                 if match:
-                    entities["item"] = match[0]
+                    found = match[0]
                     break
-        # Extract quantity (numbers followed by piece/plate/order)
-        num_match = re.search(r"(\d+)\s*(?:piece|plate|order|pc|nos?|time)", text_lower)
-        if num_match:
-            entities["quantity"] = int(num_match.group(1))
-        else:
-            entities["quantity"] = 1
+        if found:
+            entities["item"] = found
+        # Extract name
+        name_match = re.search(r"(?:my name is|i am|i'm|name is)\s+([a-zA-Z]+)", text_lower)
+        if name_match:
+            entities["name"] = name_match.group(1).title()
+        elif len(text_lower.split()) == 1 and text_lower.isalpha() and text_lower not in self.item_names:
+            entities["name"] = text_lower.title()
+        # Extract phone number
+        phone_match = re.search(r"\b(\d{10})\b", text)
+        if phone_match:
+            entities["phone"] = phone_match.group(1)
         return entities

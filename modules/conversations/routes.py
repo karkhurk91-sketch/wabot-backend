@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from modules.common.database import get_db
-from modules.common.models import Conversation
+from modules.common.models import Conversation, Message
 from modules.auth.jwt import get_current_user
 
 router = APIRouter(prefix="/api/conversations", tags=["Conversations"])
@@ -18,11 +18,20 @@ async def list_conversations(
         query = query.where(Conversation.organization_id == org_id)
     result = await db.execute(query)
     convs = result.scalars().all()
-    return [{
-        "id": c.id,
-        "customer_phone": c.customer_phone_number,
-        "organization_name": None,   # optional, could fetch from organizations table
-        "last_message": None,        # could join with messages table
-        "status": c.status,
-        "lead_score": c.lead_score
-    } for c in convs]
+    
+    output = []
+    for c in convs:
+        # Get last message (optional)
+        msg_result = await db.execute(
+            select(Message).where(Message.conversation_id == c.id).order_by(Message.created_at.desc()).limit(1)
+        )
+        last_msg = msg_result.scalar_one_or_none()
+        output.append({
+            "id": c.id,
+            "customer_phone": c.customer_phone_number,
+            "organization_name": None,  # we can fetch org name if needed
+            "last_message": last_msg.content if last_msg else None,
+            "status": c.status,
+            "lead_score": c.lead_score
+        })
+    return output

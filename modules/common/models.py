@@ -59,6 +59,7 @@ class Conversation(Base):
     customer_name = Column(String(255))
     status = Column(String(20), default="open")
     lead_score = Column(Integer, default=0)
+    service = Column(String(100), nullable=True)
     tags = Column(ARRAY(String))
     started_at = Column(DateTime(timezone=True), server_default=func.now())
     last_message_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -88,6 +89,8 @@ class Lead(Base):
     budget_range = Column(String(50))
     status = Column(String(20), default="new")
     notes = Column(Text)
+    service = Column(String(100), nullable=True)
+    lead_score = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

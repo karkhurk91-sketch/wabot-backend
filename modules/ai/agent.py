@@ -1,4 +1,6 @@
 import importlib
+import json
+import re
 from groq import Groq
 from sqlalchemy import text
 from modules.common.config import GROQ_API_KEY
@@ -8,7 +10,6 @@ from modules.ai.booking_helper import save_booking_generic
 
 client = Groq(api_key=GROQ_API_KEY)
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
-
 _agent_cache = {}
 
 def get_primary_prompt_for_org(org_id: str) -> str:
@@ -23,12 +24,10 @@ def get_primary_prompt_for_org(org_id: str) -> str:
     return None
 
 def get_system_prompt_sync(org_id: str = None) -> str:
-    # First try to get the primary prompt from new table
     if org_id:
         primary = get_primary_prompt_for_org(org_id)
         if primary:
             return primary
-    # Fallback to old ai_configurations table
     with sync_engine.connect() as conn:
         if org_id:
             result = conn.execute(
@@ -45,7 +44,6 @@ def get_system_prompt_sync(org_id: str = None) -> str:
         if row and row[0] and row[0].strip():
             return row[0]
     return "You are a helpful AI assistant for a small business. Answer concisely and politely."
-
 
 def get_industry_module(org_id: str):
     with sync_engine.connect() as conn:
@@ -68,6 +66,7 @@ class DefaultAgent:
         self.user_id = user_id
         self.org_id = org_id
         self.memory = []
+        self._pending_lead = None
 
     def predict(self, user_input: str) -> str:
         if not user_input or not user_input.strip():
@@ -80,14 +79,39 @@ class DefaultAgent:
                 model=DEFAULT_MODEL,
                 messages=[{"role": "user", "content": full_prompt}],
                 temperature=0.7,
-                max_tokens=250
+                max_tokens=500
             )
-            reply = response.choices[0].message.content.strip()
+            full_response = response.choices[0].message.content.strip()
         except Exception as e:
             print(f"Groq error: {e}")
-            reply = "Sorry, I'm having trouble. Please try again."
+            full_response = "Sorry, I'm having trouble. Please try again."
+        # Extract lead JSON
+        reply, lead_data = self._extract_lead_data(full_response)
+        self._pending_lead = lead_data
         self.memory.append({"user": user_input, "bot": reply})
         return reply
+
+    def _extract_lead_data(self, response_text: str):
+        pattern = r'(\{[^{}]*"lead"\s*:\s*(true|false)[^{}]*\})'
+        match = re.search(pattern, response_text, re.IGNORECASE | re.DOTALL)
+        if match:
+            try:
+                lead_data = json.loads(match.group(1))
+                cleaned = response_text.replace(match.group(1), '').strip()
+                return cleaned, lead_data
+            except:
+                pass
+        lines = response_text.strip().split('\n')
+        if lines:
+            last_line = lines[-1].strip()
+            if last_line.startswith('{') and last_line.endswith('}'):
+                try:
+                    lead_data = json.loads(last_line)
+                    cleaned = '\n'.join(lines[:-1]).strip()
+                    return cleaned, lead_data
+                except:
+                    pass
+        return response_text, None
 
 class SmartAgent:
     def __init__(self, user_id: str, org_id: str = None):
@@ -99,6 +123,7 @@ class SmartAgent:
         self.rules = None
         self.state = None
         self._fallback = False
+        self._pending_lead = None
 
         if org_id:
             self.industry_mod = get_industry_module(org_id)
@@ -115,6 +140,8 @@ class SmartAgent:
                 self.state = self.industry_mod.State()
                 self.prompts = self.industry_mod.Prompts(org_id)
                 self._fallback = False
+                self.default_agent = DefaultAgent(user_id, org_id)       # <-- ADD THIS
+
             else:
                 print(f"No industry module for org {org_id}, using DefaultAgent")
                 self._fallback = True
@@ -136,8 +163,8 @@ class SmartAgent:
         except Exception as e:
             print(f"Rules engine error: {e}, falling back to default")
             return self.default_agent.predict(user_input)
+        print(f"DEBUG: action={action}, action_data={action_data}")
 
-        # Handle confirmation (generic)
         if action == "confirm_booking":
             save_booking_generic(self.org_id, self.state, self.industry_mod.__name__.split('.')[-1])
             action_prompt = "Booking confirmed. Say: 'Booking confirmed! We'll remind you one day before.'"
@@ -158,15 +185,39 @@ class SmartAgent:
                 model=DEFAULT_MODEL,
                 messages=[{"role": "user", "content": full_prompt}],
                 temperature=0.5,
-                max_tokens=250
+                max_tokens=500
             )
-            reply = response.choices[0].message.content.strip()
+            full_response = response.choices[0].message.content.strip()
         except Exception as e:
             print(f"Groq error: {e}")
-            reply = "Sorry, I'm having trouble. Please try again."
+            full_response = "Sorry, I'm having trouble. Please try again."
 
+        reply, lead_data = self._extract_lead_data(full_response)
+        self._pending_lead = lead_data
         self.memory.append({"user": user_input, "bot": reply})
         return reply
+
+    def _extract_lead_data(self, response_text: str):
+        pattern = r'(\{[^{}]*"lead"\s*:\s*(true|false)[^{}]*\})'
+        match = re.search(pattern, response_text, re.IGNORECASE | re.DOTALL)
+        if match:
+            try:
+                lead_data = json.loads(match.group(1))
+                cleaned = response_text.replace(match.group(1), '').strip()
+                return cleaned, lead_data
+            except:
+                pass
+        lines = response_text.strip().split('\n')
+        if lines:
+            last_line = lines[-1].strip()
+            if last_line.startswith('{') and last_line.endswith('}'):
+                try:
+                    lead_data = json.loads(last_line)
+                    cleaned = '\n'.join(lines[:-1]).strip()
+                    return cleaned, lead_data
+                except:
+                    pass
+        return response_text, None
 
 def get_agent_for_user_compat(user_id: str, org_id: str = None):
     key = f"{user_id}_{org_id}"

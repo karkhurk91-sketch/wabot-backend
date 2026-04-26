@@ -153,6 +153,7 @@ async def forgot_password(
     <p>Click the link below to reset your password. This link expires in 30 minutes.</p>
     <a href="{reset_link}">Reset Password</a>
     """
+    print(reset_link);
     background_tasks.add_task(send_email, user.email, "Reset your password", email_body)
     return {"message": "If an account exists, a reset link has been sent."}
 

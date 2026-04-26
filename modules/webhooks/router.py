@@ -1,77 +1,103 @@
-# modules/webhooks/router.py
-from fastapi import APIRouter, Request, HTTPException, Query
-from modules.channels.factory import ChannelFactory
-from modules.common.database import sync_engine
-from sqlalchemy import text
-from modules.common.models import Conversation, Message
+from fastapi import APIRouter, Request, HTTPException, Depends, BackgroundTasks
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from modules.message.models import IncomingMessage
+from modules.common.config import VERIFY_TOKEN
+from modules.common.database import get_db
+from modules.common.models import Organization, Conversation, Message
+from modules.ai.processor import process_incoming_message
 from modules.common.logger import get_logger
 import uuid
 from datetime import datetime
 
-router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
+logger = get_logger(__name__)
+router = APIRouter(prefix="/webhook", tags=["WhatsApp"])
 
-# Helper to map incoming webhook to organization (simplified)
-async def get_org_id_from_webhook(channel: str, request: Request) -> str:
-    if channel == "telegram":
-        # Telegram passes bot token in URL or header – implement lookup
-        pass
-    elif channel == "facebook":
-        # Look up by page_id from payload
-        data = await request.json()
-        for entry in data.get("entry", []):
-            page_id = entry.get("id")
-            with sync_engine.connect() as conn:
-                row = conn.execute(
-                    text("SELECT organization_id FROM organization_channels WHERE channel_type = 'facebook' AND config->>'page_id' = :page_id"),
-                    {"page_id": page_id}
-                ).fetchone()
-                if row:
-                    return row[0]
-    return None
+@router.get("")
+async def verify_webhook(
+    hub_mode: str = None,
+    hub_verify_token: str = None,
+    hub_challenge: int = None
+):
+    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
+        return hub_challenge
+    raise HTTPException(status_code=403, detail="Verification failed")
 
-@router.post("/{channel_type}")
-async def channel_webhook(channel_type: str, request: Request):
-    org_id = await get_org_id_from_webhook(channel_type, request)
-    if not org_id:
-        return {"status": "ignored"}
+@router.post("")
+async def receive_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    body = await request.json()
+    logger.info(f"Webhook received: {body}")
 
-    with sync_engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT config FROM organization_channels WHERE organization_id = :org_id AND channel_type = :channel"),
-            {"org_id": org_id, "channel": channel_type}
-        ).fetchone()
-    if not row:
-        return {"status": "channel not configured"}
+    try:
+        entry = body["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+        if "messages" in value:
+            msg_data = value["messages"][0]
+            from_number = msg_data["from"]
+            text = msg_data["text"]["body"]
+            timestamp = int(msg_data["timestamp"])
+            business_phone_number = value["metadata"]["display_phone_number"]
 
-    adapter = ChannelFactory.get_adapter(channel_type, org_id, row.config)
-    internal_msg = await adapter.handle_webhook(request)
-    if not internal_msg:
-        return {"status": "no message"}
+            # Find organization
+            result = await db.execute(
+                select(Organization.id).where(Organization.whatsapp_phone_number == business_phone_number)
+            )
+            org = result.scalar_one_or_none()
+            if not org:
+                logger.warning(f"No organization found for WhatsApp number: {business_phone_number}")
+                return {"status": "ignored", "reason": "unknown_whatsapp_number"}
 
-    # Store message (simplified – you can reuse existing conversation logic)
+            # Find or create conversation
+            conv_result = await db.execute(
+                select(Conversation).where(
+                    Conversation.organization_id == org,
+                    Conversation.customer_phone_number == from_number
+                )
+            )
+            conv = conv_result.scalar_one_or_none()
+            if not conv:
+                conv = Conversation(
+                    id=uuid.uuid4(),
+                    organization_id=org,
+                    customer_phone_number=from_number,
+                    status="open",
+                    started_at=datetime.utcnow(),
+                    last_message_at=datetime.utcnow()
+                )
+                db.add(conv)
+                await db.flush()
+
+            # Save incoming message
+            new_message = Message(
+                id=uuid.uuid4(),
+                conversation_id=conv.id,
+                direction="inbound",
+                content=text,
+                is_ai_generated=False,
+                created_at=datetime.utcnow()
+            )
+            db.add(new_message)
+            await db.commit()
+
+            # Queue for AI processing (using BackgroundTasks)
+            background_tasks.add_task(
+                process_incoming_message,
+                {
+                    "from_number": from_number,
+                    "text": text,
+                    "timestamp": timestamp,
+                    "org_id": str(org),
+                    "conversation_id": str(conv.id)
+                }
+            )
+            logger.info(f"Scheduled processing for message from {from_number}")
+
+    except Exception as e:
+        logger.error(f"Error processing webhook: {e}")
+
     return {"status": "ok"}
-
-@router.get("/facebook")
-async def verify_facebook_webhook(
-    hub_mode: str = Query(None),
-    hub_verify_token: str = Query(None),
-    hub_challenge: int = Query(None)
-):
-    # Replace with your own verify token (must match what you enter in Meta dashboard)
-    FACEBOOK_VERIFY_TOKEN = "myWhatsApp2026"
-    if hub_mode == "subscribe" and hub_verify_token == FACEBOOK_VERIFY_TOKEN:
-        return hub_challenge
-    raise HTTPException(status_code=403, detail="Verification failed")
-
-
-@router.get("/instagram")
-async def verify_instagram_webhook(
-    hub_mode: str = Query(None),
-    hub_verify_token: str = Query(None),
-    hub_challenge: int = Query(None)
-):
-    # Use a verify token (must match what you set in Meta dashboard for Instagram)
-    INSTAGRAM_VERIFY_TOKEN = "myWhatsApp2026"  # change as needed
-    if hub_mode == "subscribe" and hub_verify_token == INSTAGRAM_VERIFY_TOKEN:
-        return hub_challenge
-    raise HTTPException(status_code=403, detail="Verification failed")

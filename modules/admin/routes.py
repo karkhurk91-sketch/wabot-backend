@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, func
 from modules.common.database import get_db
-from modules.common.models import Organization, User, Customer, Conversation, Lead
+from modules.common.models import Organization, User, Customer, Conversation, Lead, AIConfig
 from modules.auth.jwt import get_current_super_admin, get_password_hash
 from pydantic import BaseModel
 from uuid import UUID
@@ -367,3 +367,46 @@ async def delete_channel(
     )
     await db.commit()
     return {"status": "deleted"}
+
+
+class AIConfigUpdate(BaseModel):
+    system_prompt: Optional[str] = None
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    enable_lead_capture: Optional[bool] = None
+
+@router.get("/organizations/{org_id}/ai-config")
+async def get_org_ai_config(
+    org_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _ = Depends(get_current_super_admin)
+):
+    result = await db.execute(select(AIConfig).where(AIConfig.organization_id == org_id))
+    config = result.scalar_one_or_none()
+    if not config:
+        # Return defaults
+        return {
+            "system_prompt": "You are a helpful AI assistant.",
+            "temperature": 0.7,
+            "max_tokens": 500,
+            "enable_lead_capture": True
+        }
+    return config
+
+@router.put("/organizations/{org_id}/ai-config")
+async def update_org_ai_config(
+    org_id: UUID,
+    data: AIConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    _ = Depends(get_current_super_admin)
+):
+    result = await db.execute(select(AIConfig).where(AIConfig.organization_id == org_id))
+    config = result.scalar_one_or_none()
+    if not config:
+        config = AIConfig(organization_id=org_id)
+        db.add(config)
+    update_data = data.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(config, key, value)
+    await db.commit()
+    return config

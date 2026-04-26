@@ -1,4 +1,3 @@
-# modules/ai/processor.py
 import asyncio
 from modules.ai.agent import get_agent_for_user_compat
 from modules.message.sender import send_whatsapp_text, send_whatsapp_template
@@ -53,18 +52,22 @@ async def process_incoming_message(message: dict):
     ai_response = agent.predict(user_text)
     logger.info(f"AI response: {ai_response[:200]}")
 
+    # Extract lead data from agent
+    lead_data = getattr(agent, '_pending_lead', None)
+    if lead_data and lead_data.get('lead') and lead_capture_enabled:
+        interest = lead_data.get('interest', user_text[:100])
+        service = lead_data.get('service')
+        score = lead_data.get('score', 70)
+        await create_lead(org_id, user_id, interest, service=service, lead_score=score)
+        logger.info(f"Lead created for {user_id} (service: {service}, score: {score})")
+
+    # Send reply
     if recent:
         success = await send_whatsapp_text(to_number=user_id, text=ai_response)
     else:
-        success = await send_whatsapp_template(to_number=user_id, template_name="hello", language_code="en", category="UTILITY" )
+        success = await send_whatsapp_template(to_number=user_id, template_name="hello_world", language_code="en", category="UTILITY")
 
     if success:
         logger.info(f"Reply sent to {user_id}")
     else:
         logger.error(f"Failed to send reply to {user_id}")
-
-    if lead_capture_enabled and org_id:
-        keywords = ["buy", "price", "interested", "purchase", "cost", "quote", "want", "order"]
-        if any(kw in user_text.lower() for kw in keywords):
-            await create_lead(org_id, user_id, user_text[:100])
-            logger.info(f"Lead captured for {user_id}")

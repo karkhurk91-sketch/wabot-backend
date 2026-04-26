@@ -2,40 +2,29 @@ from ..base import BaseState
 
 class RestaurantState(BaseState):
     def __init__(self):
-        self.current_order = {}      # {item_name: quantity}
-        self.stage = "greeting"      # greeting, ordering, confirming, payment
-        self.last_item = None
+        super().__init__()
+        self.order_items = None          # dict {item: quantity} (or just item name)
+        self.name = None
+        self.phone = None
+        self.delivery_preference = None  # "delivery" or "takeaway"
         self.confirmed = False
+        self.required_fields = ["order_items", "name", "phone", "delivery_preference"]
 
     def reset(self):
         self.__init__()
 
     def is_complete(self):
-        return self.confirmed and self.current_order
-
-    def add_item(self, item: str, quantity: int = 1):
-        self.current_order[item] = self.current_order.get(item, 0) + quantity
-        self.last_item = item
-
-    def remove_item(self, item: str):
-        if item in self.current_order:
-            del self.current_order[item]
-
-    def update_quantity(self, item: str, quantity: int):
-        if quantity <= 0:
-            self.remove_item(item)
-        else:
-            self.current_order[item] = quantity
+        return self.confirmed and self.order_items and self.name and self.phone and self.delivery_preference
 
     def total_price(self):
-        from .intent import RestaurantIntentClassifier
-        classifier = RestaurantIntentClassifier()
-        return sum(classifier.menu_items.get(item, 0) * qty for item, qty in self.current_order.items())
+        # Implement based on menu; for now return a placeholder
+        # You can calculate from self.order_items later
+        return 350
 
     def to_dict(self):
         return {
-            "order": self.current_order,
-            "total": self.total_price(),
-            "stage": self.stage,
-            "confirmed": self.confirmed
+            "order": self.order_items,
+            "name": self.name,
+            "phone": self.phone,
+            "delivery_preference": self.delivery_preference
         }

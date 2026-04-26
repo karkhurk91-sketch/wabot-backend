@@ -71,6 +71,9 @@ async def receive_webhook(
                 )
                 db.add(conv)
                 await db.flush()
+                logger.info(f"Created new conversation for {from_number} under org {org}")
+            else:
+                logger.info(f"Using existing conversation {conv.id} for {from_number}")
 
             # Save incoming message
             new_message = Message(
