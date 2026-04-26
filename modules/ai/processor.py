@@ -63,9 +63,9 @@ async def process_incoming_message(message: dict):
 
     # Send reply
     if recent:
-        success = await send_whatsapp_text(to_number=user_id, text=ai_response)
+        success = await send_whatsapp_text(to_number=user_id, text=ai_response, org_id=str(org_id))
     else:
-        success = await send_whatsapp_template(to_number=user_id, template_name="hello_world", language_code="en", category="UTILITY")
+        success = await send_whatsapp_template(to_number=user_id, template_name="hello", language_code="en", category="UTILITY", org_id=str(org_id))
 
     if success:
         logger.info(f"Reply sent to {user_id}")
