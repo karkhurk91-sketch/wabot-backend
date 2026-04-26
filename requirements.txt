@@ -35,3 +35,4 @@ pycparser==3.0
 six==1.17.0
 python-dateutil==2.9.0.post0
 aiosmtplib
+python-slugify
