@@ -6,7 +6,15 @@ class RestaurantPrompts(BasePrompts):
 
     def get_system_prompt(self) -> str:
         from modules.ai.agent import get_system_prompt_sync
-        return get_system_prompt_sync(self.org_id)
+        base = get_system_prompt_sync(self.org_id)
+        json_instruction = """
+IMPORTANT: After EVERY response, output a JSON object on its own line exactly like this:
+
+{"intent": "ask_item|ask_name|ask_phone|ask_delivery|confirm", "entities": {"order_items": "...", "name": "...", "phone": "...", "delivery_preference": "delivery/takeaway"}, "lead": {"lead": true/false, "interest": "...", "service": "...", "score": 0-100}}
+
+If no lead is detected, set "lead": {"lead": false, "interest": "", "service": "", "score": 0}. Do not omit the "lead" field.
+"""
+        return base + json_instruction
 
     def get_action_prompt(self, action: str, data: dict) -> str:
         if action == "greet":

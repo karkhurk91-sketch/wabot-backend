@@ -22,14 +22,24 @@ from modules.chat.test_routes import router as admin_ai_test_router
 from modules.blog.routes import router as blog_router
 from modules.messages.router import router as messages_router
 from modules.webhooks.router import router as webhooks_router
-
-
+from modules.campaigns import router as campaigns_router
+from fastapi.staticfiles import StaticFiles
+import os
 
 logger = get_logger(__name__)
 
 app = FastAPI(title=APP_NAME)
+os.makedirs("uploads/campaigns", exist_ok=True)
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
+
+
+
 
 # CORS middleware
+# Mount static files for campaign images
+from fastapi.staticfiles import StaticFiles
+os.makedirs("uploads/campaigns", exist_ok=True)
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:8000", "https://wabot-backend-geky.onrender.com", "https://wabot-dashboard-one.vercel.app"],
@@ -58,6 +68,7 @@ app.include_router(admin_ai_test_router)
 app.include_router(blog_router)
 app.include_router(messages_router)
 app.include_router(webhooks_router)
+app.include_router(campaigns_router)
 
 @app.on_event("startup")
 async def startup():

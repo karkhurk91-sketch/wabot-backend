@@ -19,6 +19,9 @@ WhatsApp_Business_Account_ID=os.getenv("WhatsApp_Business_Account_ID")
 # AI
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
+
+
 # Database
 # Async database URL (must use asyncpg)
 #DATABASE_URL = os.getenv("DATABASE_URL")

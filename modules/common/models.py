@@ -4,21 +4,18 @@ from sqlalchemy.sql import func
 from modules.common.database import Base
 import uuid
 
+
 class Organization(Base):
     __tablename__ = "organizations"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     business_type = Column(String(100))
-    whatsapp_phone_number = Column(String(20), unique=True)
-    whatsapp_phone_number_id = Column(String(500), nullable=True)
+    whatsapp_phone_number = Column(String(100), unique=True)
     status = Column(String(20), default="pending")  # pending, active, suspended
     plan = Column(String(50), default="basic")
     settings = Column(JSON, default={})
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    whatsapp_access_token = Column(Text, nullable=True) 
-    whatsapp_business_account_id = Column(String(500), nullable=True)
-    wat_org = Column(Text, nullable=True) 
 
 class User(Base):
     __tablename__ = "users"
@@ -63,6 +60,7 @@ class Conversation(Base):
     tags = Column(ARRAY(String))
     started_at = Column(DateTime(timezone=True), server_default=func.now())
     last_message_at = Column(DateTime(timezone=True), server_default=func.now())
+    campaign_id = Column(UUID(as_uuid=True), nullable=True)
     closed_at = Column(DateTime(timezone=True))
 
 class Message(Base):
@@ -91,6 +89,7 @@ class Lead(Base):
     notes = Column(Text)
     service = Column(String(100), nullable=True)
     lead_score = Column(Integer, default=0)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -189,4 +188,35 @@ class OrganizationChannel(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     __table_args__ = (UniqueConstraint('organization_id', 'channel_type'),)
 
+class Campaign(Base):
+    __tablename__ = "campaigns"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"))
+    name = Column(String(255))
+    product_name = Column(String(255))
+    price = Column(String(50))
+    location = Column(String(100))
+    description = Column(Text)
+    whatsapp_link = Column(Text)
+    status = Column(String(20), default="draft")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+class CampaignCreative(Base):
+    __tablename__ = "campaign_creatives"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"))
+    type = Column(String(20))
+    content = Column(Text)
+    is_selected = Column(Boolean, default=False)
+    media_url = Column(Text, nullable=True)   # <-- ADD THIS LINE
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+class CampaignMeta(Base):
+    __tablename__ = "campaign_meta"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"))
+    audience_suggestion = Column(Text)
+    budget_suggestion = Column(String(50))
+    platform_suggestion = Column(String(50))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
