@@ -7,6 +7,8 @@ load_dotenv()
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+#meta facebook Ads
+FACEBOOK_ACCESS_TOKEN=os.getenv("FACEBOOK_ACCESS_TOKEN")
 
 # WhatsApp
 WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN")
