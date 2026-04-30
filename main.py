@@ -74,7 +74,7 @@ async def startup():
         # Step 2: Add missing column safely
         await conn.execute(text("""
             ALTER TABLE customers 
-            ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(255);
+            ADD COLUMN IF NOT EXISTS instagram_id VARCHAR(255);
         """))
 
     #logger.info("Database initialized + migration applied")
