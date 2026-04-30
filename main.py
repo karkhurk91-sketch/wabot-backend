@@ -22,7 +22,7 @@ from modules.chat.test_routes import router as admin_ai_test_router
 from modules.blog.routes import router as blog_router
 from modules.messages.router import router as messages_router
 from modules.webhooks.router import router as webhooks_router
-
+from sqlalchemy import text
 
 
 logger = get_logger(__name__)
@@ -59,8 +59,11 @@ app.include_router(blog_router)
 app.include_router(messages_router)
 app.include_router(webhooks_router)
 
-
-
+#@app.on_event("startup")
+#async def startup():
+#    async with engine.begin() as conn:
+#        await conn.run_sync(Base.metadata.create_all)
+#    logger.info("Database tables initialized")
 @app.on_event("startup")
 async def startup():
     async with engine.begin() as conn:
