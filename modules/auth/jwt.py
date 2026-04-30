@@ -37,7 +37,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             "sub": payload.get("sub"),
             "email": payload.get("email"),
             "role": payload.get("role"),
-            "org_id": payload.get("org_id")
+            "org_id": payload.get("org_id"),
+            "user_id": payload.get("user_id"), 
         }
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")

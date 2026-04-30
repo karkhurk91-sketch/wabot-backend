@@ -19,6 +19,9 @@ from modules.common.models import Campaign, CampaignCreative, CampaignMeta, Orga
 from modules.auth.jwt import get_current_user
 from modules.common.logger import get_logger
 from modules.common.config import GROQ_API_KEY, API_BASE_URL
+from modules.social.factory import SocialFactory
+from modules.common.models import SocialAccount, SocialAdCampaign
+
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/campaign", tags=["Campaign"])
@@ -83,6 +86,15 @@ class SuggestTagsRequest(BaseModel):
     product_name: str
     location: str
     industry: Optional[str] = None
+
+class AdCampaignCreate(BaseModel):
+    platform: str = "facebook"
+    name: str
+    daily_budget: int
+    targeting: dict
+    lead_form_questions: list
+    story_spec: dict
+    start_time: Optional[str] = None
 
 # ---------- Text caption generator ----------
 def _generate_captions_sync(product_name: str, price: str, location: str, description: str = "") -> list[str]:
@@ -517,3 +529,61 @@ async def generate_ad_kit_endpoint(data: AdKitGenRequest):
         response_format={"type": "json_object"}
     )
     return json.loads(response.choices[0].message.content)
+
+@router.post("/{campaign_id}/create-ad-campaign")
+async def create_ad_campaign(
+    campaign_id: UUID,
+    data: AdCampaignCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    # Verify campaign exists
+    stmt = select(Campaign).where(Campaign.id == campaign_id, Campaign.organization_id == current_user["org_id"])
+    campaign = (await db.execute(stmt)).scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+    
+    # Get social account
+    social_stmt = select(SocialAccount).where(
+        SocialAccount.organization_id == current_user["org_id"],
+        SocialAccount.platform == data.platform,
+        SocialAccount.is_active == True
+    )
+    social_account = (await db.execute(social_stmt)).scalar_one_or_none()
+    if not social_account:
+        raise HTTPException(400, f"{data.platform} account not configured")
+    
+    ad_account_id = social_account.settings.get("ad_account_id")
+    if not ad_account_id:
+        raise HTTPException(400, "Ad account ID not configured")
+    
+    platform_data = data.dict()
+    platform_data["ad_account_id"] = ad_account_id
+    
+    client = SocialFactory.get_platform(
+        platform=data.platform,
+        organization_id=str(current_user["org_id"]),
+        account_id=social_account.account_id,
+        access_token=social_account.access_token
+    )
+    
+    result = await client.create_ad_campaign(platform_data)
+    
+    # Store in DB
+    ad_campaign = SocialAdCampaign(
+        organization_id=current_user["org_id"],
+        platform=data.platform,
+        campaign_id=result["campaign_id"],
+        adset_id=result["adset_id"],
+        ad_id=result["ad_id"],
+        lead_form_id=result["lead_form_id"],
+        name=data.name,
+        objective="OUTCOME_LEADS",
+        status="ACTIVE",
+        daily_budget=data.daily_budget,
+        targeting=data.targeting
+    )
+    db.add(ad_campaign)
+    await db.commit()
+    
+    return result

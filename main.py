@@ -24,6 +24,9 @@ from modules.messages.router import router as messages_router
 from modules.webhooks.router import router as webhooks_router
 from modules.campaigns import router as campaigns_router
 from fastapi.staticfiles import StaticFiles
+from modules.social import router as social_router
+from modules.conversations import router as conversations_router
+
 import os
 
 logger = get_logger(__name__)
@@ -31,9 +34,6 @@ logger = get_logger(__name__)
 app = FastAPI(title=APP_NAME)
 os.makedirs("uploads/campaigns", exist_ok=True)
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
-
-
-
 
 # CORS middleware
 # Mount static files for campaign images
@@ -69,6 +69,9 @@ app.include_router(blog_router)
 app.include_router(messages_router)
 app.include_router(webhooks_router)
 app.include_router(campaigns_router)
+app.include_router(social_router)
+app.include_router(conversations_router)
+
 
 @app.on_event("startup")
 async def startup():
