@@ -59,11 +59,21 @@ app.include_router(blog_router)
 app.include_router(messages_router)
 app.include_router(webhooks_router)
 
+
+
 @app.on_event("startup")
 async def startup():
     async with engine.begin() as conn:
+        # Step 1: Create tables if not exist
         await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables initialized")
+
+        # Step 2: Add missing column safely
+        await conn.execute(text("""
+            ALTER TABLE customers 
+            ADD COLUMN IF NOT EXISTS fb_psid VARCHAR(255)
+        """))
+
+    logger.info("Database initialized + migration applied")
 
 @app.on_event("shutdown")
 async def shutdown():
