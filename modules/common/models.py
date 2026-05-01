@@ -32,21 +32,28 @@ class User(Base):
     email_verified = Column(Boolean, default=False)
     verification_token = Column(String(255), nullable=True)
 
+# models.py
+
 class Customer(Base):
     __tablename__ = "customers"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"))
+    country_code = Column(String(10), default="+91")
     phone_number = Column(String(20), nullable=False)
     name = Column(String(255))
     email = Column(String(255))
+    address = Column(Text)
+    pincode = Column(String(20))
+    profession = Column(String(100))
+    is_active = Column(Boolean, default=True)   
     fb_psid = Column(String(255), nullable=True)
-    instagram_id = Column(String(255), nullable=True)
-    telegram_chat_id = Column(String(255), nullable=True)
     notes = Column(Text)
-    deleted_at = Column(DateTime(timezone=True))  # soft delete
+    deleted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    __table_args__ = (Index("ix_customers_org_phone", organization_id, phone_number, unique=True),)
+    __table_args__ = (
+        Index("ix_customers_org_phone", organization_id, phone_number, unique=True),
+    )
 
 class Conversation(Base):
     __tablename__ = "conversations"
@@ -62,6 +69,7 @@ class Conversation(Base):
     started_at = Column(DateTime(timezone=True), server_default=func.now())
     last_message_at = Column(DateTime(timezone=True), server_default=func.now())
     campaign_id = Column(UUID(as_uuid=True), nullable=True)
+    rule_state = Column(JSON, default={})
     closed_at = Column(DateTime(timezone=True))
 
 class Message(Base):

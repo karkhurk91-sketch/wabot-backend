@@ -18,7 +18,7 @@ from modules.chat.routes import router as chat_router
 from modules.bookings.routes import router as bookings_router
 from modules.organizations.routes import router as organizations_router
 from modules.admin.prompts import router as admin_prompts_router
-from modules.chat.test_routes import router as admin_ai_test_router
+#from modules.chat.test_routes import router as admin_ai_test_router
 from modules.blog.routes import router as blog_router
 from modules.messages.router import router as messages_router
 from modules.webhooks.router import router as webhooks_router
@@ -26,6 +26,7 @@ from modules.campaigns import router as campaigns_router
 from fastapi.staticfiles import StaticFiles
 from modules.social import router as social_router
 from modules.conversations import router as conversations_router
+from sqlalchemy import create_engine, text
 
 import os
 
@@ -64,7 +65,7 @@ app.include_router(chat_router)
 app.include_router(bookings_router)
 app.include_router(organizations_router)
 app.include_router(admin_prompts_router)
-app.include_router(admin_ai_test_router)
+#app.include_router(admin_ai_test_router)
 app.include_router(blog_router)
 app.include_router(messages_router)
 app.include_router(webhooks_router)
@@ -72,13 +73,22 @@ app.include_router(campaigns_router)
 app.include_router(social_router)
 app.include_router(conversations_router)
 
+from sqlalchemy import text
 
 @app.on_event("startup")
 async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("""
+            ALTER TABLE customers 
+            ADD COLUMN IF NOT EXISTS country_code VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS address TEXT,
+            ADD COLUMN IF NOT EXISTS pincode VARCHAR(20),
+            ADD COLUMN IF NOT EXISTS profession VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE
+        """))
     logger.info("Database tables initialized")
-
+    
 @app.on_event("shutdown")
 async def shutdown():
     await engine.dispose()

@@ -257,8 +257,8 @@ async def toggle_mode(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    if mode not in ('ai', 'human'):
-        raise HTTPException(400, "Mode must be 'ai' or 'human'")
+    if mode not in ('ai', 'human', 'rule'):
+        raise HTTPException(400, "Mode must be 'ai' or 'human' or 'rule'")
     await db.execute(
         update(Conversation).where(Conversation.id == conv_id).values(reply_mode=mode)
     )

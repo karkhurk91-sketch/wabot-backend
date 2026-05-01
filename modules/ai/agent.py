@@ -54,12 +54,17 @@ def get_industry_module(org_id: str):
         row = result.fetchone()
         if not row:
             raise ValueError(f"Organization {org_id} not found")
-        industry = row[0].lower() if row[0] else "salon"
+        industry = row[0].lower() if row[0] else None
+    if industry is None:
+        # No business_type → use default module
+        import modules.ai.industries.default as default_module
+        return default_module
     try:
-        module = importlib.import_module(f"modules.ai.industries.{industry}")
-        return module
+        return importlib.import_module(f"modules.ai.industries.{industry}")
     except ImportError:
-        return None
+        # Industry module not found → fallback to default
+        import modules.ai.industries.default as default_module
+        return default_module
 
 class DefaultAgent:
     def __init__(self, user_id: str, org_id: str = None):
@@ -96,12 +101,12 @@ class DefaultAgent:
         return reply
 
     def _extract_structured(self, response_text: str):
-        pattern = r'(\{[^{}]*"intent"\s*:\s*"[^"]+"[^{}]*\})'
+        # Look for JSON containing "lead": true or "lead": false
+        pattern = r'(\{[^{}]*"lead"\s*:\s*(?:true|false)[^{}]*\})'
         match = re.search(pattern, response_text, re.IGNORECASE | re.DOTALL)
         if match:
             try:
                 data = json.loads(match.group(1))
-                # Ensure lead field exists
                 if 'lead' not in data or data['lead'] is None:
                     data['lead'] = {"lead": False, "interest": "", "service": "", "score": 0}
                 cleaned = response_text.replace(match.group(1), '').strip()
@@ -165,7 +170,7 @@ class SmartAgent:
         if action == "confirm_booking":
             try:
                 save_booking_generic(self.org_id, self.state, self.industry_mod.__name__.split('.')[-1])
-                self.state.reset()  # Reset after booking to avoid confusion
+                self.state.reset()
             except Exception as e:
                 print(f"Booking save error: {e}")
                 import traceback
@@ -211,7 +216,8 @@ class SmartAgent:
         return reply
 
     def _extract_structured(self, response_text: str):
-        pattern = r'(\{[^{}]*"intent"\s*:\s*"[^"]+"[^{}]*\})'
+        # Same robust pattern as DefaultAgent
+        pattern = r'(\{[^{}]*"lead"\s*:\s*(?:true|false)[^{}]*\})'
         match = re.search(pattern, response_text, re.IGNORECASE | re.DOTALL)
         if match:
             try:
