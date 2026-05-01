@@ -80,12 +80,11 @@ async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text("""
-            ALTER TABLE customers 
-            ADD COLUMN IF NOT EXISTS country_code VARCHAR(10),
-            ADD COLUMN IF NOT EXISTS address TEXT,
-            ADD COLUMN IF NOT EXISTS pincode VARCHAR(20),
-            ADD COLUMN IF NOT EXISTS profession VARCHAR(100),
-            ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE
+            ALTER TABLE conversations  
+            ADD COLUMN IF NOT EXISTS service VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS reply_mode VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS reply_mode VARCHAR(20) DEFAULT 'ai',
+            ADD COLUMN IF NOT EXISTS assigned_agent_id UUID REFERENCES users(id) ON DELETE SET NULL;
         """))
     logger.info("Database tables initialized")
     
