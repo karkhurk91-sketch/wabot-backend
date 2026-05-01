@@ -113,21 +113,21 @@ async def send_whatsapp_template(
 
 # ---------- Send WhatsApp free‑form text (only after customer message) ----------
 async def send_whatsapp_text(to_number: str, text: str, org_id: str = None):
-    """Send a free‑form text message (allowed only within 24h session)."""
+    """Send a free‑form text message (allowed only within 24h session). Returns (success, wamid)."""
     if not org_id:
         logger.error("Missing org_id – cannot send text")
-        return False
+        return False, None
 
     config = await get_whatsapp_config(org_id)
     if not config:
         logger.error(f"No active WhatsApp channel for org {org_id}")
-        return False
+        return False, None
 
     access_token = config.get("access_token")
     phone_number_id = config.get("phone_number_id")
     if not access_token or not phone_number_id:
         logger.error(f"Incomplete WhatsApp config for org {org_id}")
-        return False
+        return False, None
 
     url = f"https://graph.facebook.com/v18.0/{phone_number_id}/messages"
     headers = {
@@ -145,11 +145,13 @@ async def send_whatsapp_text(to_number: str, text: str, org_id: str = None):
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(url, headers=headers, json=payload)
             if response.status_code == 200:
-                logger.info(f"Text message sent to {to_number} (org={org_id})")
-                return True
+                result = response.json()
+                wamid = result.get("messages", [{}])[0].get("id")
+                logger.info(f"Text message sent to {to_number} (org={org_id}) with ID {wamid}")
+                return True, wamid
             else:
                 logger.error(f"Failed to send text: {response.text}")
-                return False
+                return False, None
     except Exception as e:
         logger.exception(f"Exception in send_whatsapp_text: {e}")
-        return False
+        return False, None

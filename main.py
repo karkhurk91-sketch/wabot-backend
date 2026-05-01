@@ -18,18 +18,30 @@ from modules.chat.routes import router as chat_router
 from modules.bookings.routes import router as bookings_router
 from modules.organizations.routes import router as organizations_router
 from modules.admin.prompts import router as admin_prompts_router
-from modules.chat.test_routes import router as admin_ai_test_router
+#from modules.chat.test_routes import router as admin_ai_test_router
 from modules.blog.routes import router as blog_router
 from modules.messages.router import router as messages_router
 from modules.webhooks.router import router as webhooks_router
-from sqlalchemy import text
-
+from modules.campaigns import router as campaigns_router
+from fastapi.staticfiles import StaticFiles
+from modules.social import router as social_router
+from modules.conversations import router as conversations_router
+from modules.common.config import DATABASE_URL, SYNC_DATABASE_URL
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import create_engine, text
+import os
 
 logger = get_logger(__name__)
 
 app = FastAPI(title=APP_NAME)
+os.makedirs("uploads/campaigns", exist_ok=True)
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
 # CORS middleware
+# Mount static files for campaign images
+from fastapi.staticfiles import StaticFiles
+os.makedirs("uploads/campaigns", exist_ok=True)
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:8000", "https://wabot-backend-geky.onrender.com", "https://wabot-dashboard-one.vercel.app"],
@@ -54,31 +66,39 @@ app.include_router(chat_router)
 app.include_router(bookings_router)
 app.include_router(organizations_router)
 app.include_router(admin_prompts_router)
-app.include_router(admin_ai_test_router)
+#app.include_router(admin_ai_test_router)
 app.include_router(blog_router)
 app.include_router(messages_router)
 app.include_router(webhooks_router)
+app.include_router(campaigns_router)
+app.include_router(social_router)
+app.include_router(conversations_router)
 
-#@app.on_event("startup")
-#async def startup():
-#    async with engine.begin() as conn:
-#        await conn.run_sync(Base.metadata.create_all)
-#    logger.info("Database tables initialized")
+async def run_migration():
+    """Execute the SQL migration script safely."""
+    sql_path = os.path.join("migrations", "ensure_schema.sql")
+    if not os.path.exists(sql_path):
+        logger.warning(f"Migration file {sql_path} not found, skipping.")
+        return
+    with open(sql_path, "r") as f:
+        sql_script = f.read()
+    # Use the async engine (or a sync engine if you prefer)
+    # We'll use the async engine because you already have it
+    async with engine.begin() as conn:
+        # Split by semicolons to execute multiple statements (simple approach)
+        for statement in sql_script.split(";"):
+            if statement.strip():
+                await conn.execute(text(statement))
+        logger.info("Database schema migration applied.")
+
 @app.on_event("startup")
 async def startup():
+    # Optionally run sync create_all (but the SQL already creates tables)
     async with engine.begin() as conn:
-        # Step 1: Create tables if not exist
-        await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database tables initialized")
-
-        # Step 2: Add missing column safely
-        await conn.execute(text("""
-            ALTER TABLE customers 
-            ADD COLUMN IF NOT EXISTS instagram_id VARCHAR(255);
-        """))
-
-    #logger.info("Database initialized + migration applied")
-
+        await conn.run_sync(Base.metadata.create_all)  # still useful for SQLAlchemy metadata
+    await run_migration()  # <-- add this line
+    logger.info("Database tables initialized and schema up to date")
+        
 @app.on_event("shutdown")
 async def shutdown():
     await engine.dispose()

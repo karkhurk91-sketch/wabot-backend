@@ -24,10 +24,6 @@ class OrganizationCreate(BaseModel):
     admin_password: str
     # WhatsApp credentials (optional during creation)
     whatsapp_phone_number: Optional[str] = None
-    whatsapp_phone_number_id: Optional[str] = None
-    whatsapp_access_token: Optional[str] = None
-    whatsapp_business_account_id: Optional[str] = None
-    wat_org: Optional[str] = None
 
 class OrganizationUpdate(BaseModel):
     name: Optional[str] = None
@@ -37,10 +33,6 @@ class OrganizationUpdate(BaseModel):
     status: Optional[str] = None
     plan: Optional[str] = None
     whatsapp_phone_number: Optional[str] = None
-    whatsapp_phone_number_id: Optional[str] = None
-    whatsapp_access_token: Optional[str] = None
-    whatsapp_business_account_id: Optional[str] = None
-    wat_org: Optional[str] = None
 
 
 # ---------- Helper to get admin email ----------
@@ -72,13 +64,10 @@ async def list_organizations(
             "name": org.name,
             "business_type": org.business_type,
             "whatsapp_phone_number": org.whatsapp_phone_number,
-            "whatsapp_phone_number_id": org.whatsapp_phone_number_id,
-            "whatsapp_business_account_id": org.whatsapp_business_account_id,
             "status": org.status,
             "plan": org.plan,
             "created_at": org.created_at.isoformat() if org.created_at else None,
-            "admin_email": admin_email,
-            "wat_org": org.wat_org
+            "admin_email": admin_email
         })
     return enriched
 
@@ -99,11 +88,7 @@ async def create_organization(
         business_type=org_data.business_type,
         status="active",
         settings={"gst": org_data.gst, "description": org_data.description},
-        whatsapp_phone_number=org_data.whatsapp_phone_number,
-        whatsapp_phone_number_id=org_data.whatsapp_phone_number_id,
-        whatsapp_access_token=org_data.whatsapp_access_token,
-        whatsapp_business_account_id=org_data.whatsapp_business_account_id,
-        wat_org= org_data.wat_org
+        whatsapp_phone_number=org_data.whatsapp_phone_number
     )
     db.add(new_org)
     await db.flush()
@@ -201,14 +186,11 @@ async def get_organization_details(
             "name": org_obj.name,
             "business_type": org_obj.business_type,
             "whatsapp_phone_number": org_obj.whatsapp_phone_number,
-            "whatsapp_phone_number_id": org_obj.whatsapp_phone_number_id,
-            "whatsapp_business_account_id": org_obj.whatsapp_business_account_id,
             "status": org_obj.status,
             "plan": org_obj.plan,
             "settings": org_obj.settings,
             "created_at": org_obj.created_at.isoformat() if org_obj.created_at else None,
-            "admin_email": admin_email,
-            "wat_org": org.wat_org
+            "admin_email": admin_email
         },
         "stats": {
             "customers": customers.scalar() or 0,

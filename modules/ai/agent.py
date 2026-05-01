@@ -54,12 +54,17 @@ def get_industry_module(org_id: str):
         row = result.fetchone()
         if not row:
             raise ValueError(f"Organization {org_id} not found")
-        industry = row[0].lower() if row[0] else "salon"
+        industry = row[0].lower() if row[0] else None
+    if industry is None:
+        # No business_type → use default module
+        import modules.ai.industries.default as default_module
+        return default_module
     try:
-        module = importlib.import_module(f"modules.ai.industries.{industry}")
-        return module
+        return importlib.import_module(f"modules.ai.industries.{industry}")
     except ImportError:
-        return None
+        # Industry module not found → fallback to default
+        import modules.ai.industries.default as default_module
+        return default_module
 
 class DefaultAgent:
     def __init__(self, user_id: str, org_id: str = None):
@@ -67,6 +72,7 @@ class DefaultAgent:
         self.org_id = org_id
         self.memory = []
         self._pending_lead = None
+        self._pending_structured = None
 
     def predict(self, user_input: str) -> str:
         if not user_input or not user_input.strip():
@@ -85,32 +91,28 @@ class DefaultAgent:
         except Exception as e:
             print(f"Groq error: {e}")
             full_response = "Sorry, I'm having trouble. Please try again."
-        # Extract lead JSON
-        reply, lead_data = self._extract_lead_data(full_response)
-        self._pending_lead = lead_data
+        reply, structured = self._extract_structured(full_response)
+        self._pending_structured = structured
+        if structured and structured.get('lead'):
+            self._pending_lead = structured['lead']
+        else:
+            self._pending_lead = None
         self.memory.append({"user": user_input, "bot": reply})
         return reply
 
-    def _extract_lead_data(self, response_text: str):
-        pattern = r'(\{[^{}]*"lead"\s*:\s*(true|false)[^{}]*\})'
+    def _extract_structured(self, response_text: str):
+        # Look for JSON containing "lead": true or "lead": false
+        pattern = r'(\{[^{}]*"lead"\s*:\s*(?:true|false)[^{}]*\})'
         match = re.search(pattern, response_text, re.IGNORECASE | re.DOTALL)
         if match:
             try:
-                lead_data = json.loads(match.group(1))
+                data = json.loads(match.group(1))
+                if 'lead' not in data or data['lead'] is None:
+                    data['lead'] = {"lead": False, "interest": "", "service": "", "score": 0}
                 cleaned = response_text.replace(match.group(1), '').strip()
-                return cleaned, lead_data
+                return cleaned, data
             except:
                 pass
-        lines = response_text.strip().split('\n')
-        if lines:
-            last_line = lines[-1].strip()
-            if last_line.startswith('{') and last_line.endswith('}'):
-                try:
-                    lead_data = json.loads(last_line)
-                    cleaned = '\n'.join(lines[:-1]).strip()
-                    return cleaned, lead_data
-                except:
-                    pass
         return response_text, None
 
 class SmartAgent:
@@ -124,6 +126,7 @@ class SmartAgent:
         self.state = None
         self._fallback = False
         self._pending_lead = None
+        self._pending_structured = None
 
         if org_id:
             self.industry_mod = get_industry_module(org_id)
@@ -140,8 +143,7 @@ class SmartAgent:
                 self.state = self.industry_mod.State()
                 self.prompts = self.industry_mod.Prompts(org_id)
                 self._fallback = False
-                self.default_agent = DefaultAgent(user_id, org_id)       # <-- ADD THIS
-
+                self.default_agent = DefaultAgent(user_id, org_id)
             else:
                 print(f"No industry module for org {org_id}, using DefaultAgent")
                 self._fallback = True
@@ -166,7 +168,13 @@ class SmartAgent:
         print(f"DEBUG: action={action}, action_data={action_data}")
 
         if action == "confirm_booking":
-            save_booking_generic(self.org_id, self.state, self.industry_mod.__name__.split('.')[-1])
+            try:
+                save_booking_generic(self.org_id, self.state, self.industry_mod.__name__.split('.')[-1])
+                self.state.reset()
+            except Exception as e:
+                print(f"Booking save error: {e}")
+                import traceback
+                traceback.print_exc()
             action_prompt = "Booking confirmed. Say: 'Booking confirmed! We'll remind you one day before.'"
         else:
             action_prompt = self.prompts.get_action_prompt(action, action_data.get("data", {}))
@@ -192,31 +200,34 @@ class SmartAgent:
             print(f"Groq error: {e}")
             full_response = "Sorry, I'm having trouble. Please try again."
 
-        reply, lead_data = self._extract_lead_data(full_response)
-        self._pending_lead = lead_data
+        reply, structured = self._extract_structured(full_response)
+        self._pending_structured = structured
+        if structured and structured.get('lead'):
+            self._pending_lead = structured['lead']
+            if self.state and structured.get('entities'):
+                entities = structured['entities']
+                for key, value in entities.items():
+                    if value and hasattr(self.state, key):
+                        setattr(self.state, key, value)
+        else:
+            self._pending_lead = None
+
         self.memory.append({"user": user_input, "bot": reply})
         return reply
 
-    def _extract_lead_data(self, response_text: str):
-        pattern = r'(\{[^{}]*"lead"\s*:\s*(true|false)[^{}]*\})'
+    def _extract_structured(self, response_text: str):
+        # Same robust pattern as DefaultAgent
+        pattern = r'(\{[^{}]*"lead"\s*:\s*(?:true|false)[^{}]*\})'
         match = re.search(pattern, response_text, re.IGNORECASE | re.DOTALL)
         if match:
             try:
-                lead_data = json.loads(match.group(1))
+                data = json.loads(match.group(1))
+                if 'lead' not in data or data['lead'] is None:
+                    data['lead'] = {"lead": False, "interest": "", "service": "", "score": 0}
                 cleaned = response_text.replace(match.group(1), '').strip()
-                return cleaned, lead_data
+                return cleaned, data
             except:
                 pass
-        lines = response_text.strip().split('\n')
-        if lines:
-            last_line = lines[-1].strip()
-            if last_line.startswith('{') and last_line.endswith('}'):
-                try:
-                    lead_data = json.loads(last_line)
-                    cleaned = '\n'.join(lines[:-1]).strip()
-                    return cleaned, lead_data
-                except:
-                    pass
         return response_text, None
 
 def get_agent_for_user_compat(user_id: str, org_id: str = None):

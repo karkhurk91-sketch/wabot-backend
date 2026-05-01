@@ -7,6 +7,8 @@ load_dotenv()
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+#meta facebook Ads
+FACEBOOK_ACCESS_TOKEN=os.getenv("FACEBOOK_ACCESS_TOKEN")
 
 # WhatsApp
 WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN")
@@ -18,6 +20,9 @@ WhatsApp_Business_Account_ID=os.getenv("WhatsApp_Business_Account_ID")
 
 # AI
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
+
 
 # Database
 # Async database URL (must use asyncpg)
