@@ -310,7 +310,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS campaign_id UUID REFERENCES campaigns
 
 -- Optional: Add foreign key for campaigns in conversations (if missing)
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS campaign_id UUID;
-ALTER TABLE conversations ADD COLUMN IF NOT EXISTS fk_conversations_campaign FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE SET NULL;
+
 
 -- Ensure unique constraint for customers (soft delete aware)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_customers_org_phone_deleted ON customers (organization_id, phone_number) WHERE deleted_at IS NULL;
