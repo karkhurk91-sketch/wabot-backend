@@ -26,8 +26,9 @@ from modules.campaigns import router as campaigns_router
 from fastapi.staticfiles import StaticFiles
 from modules.social import router as social_router
 from modules.conversations import router as conversations_router
+from modules.common.config import DATABASE_URL, SYNC_DATABASE_URL
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import create_engine, text
-
 import os
 
 logger = get_logger(__name__)
@@ -73,21 +74,31 @@ app.include_router(campaigns_router)
 app.include_router(social_router)
 app.include_router(conversations_router)
 
-from sqlalchemy import text
+async def run_migration():
+    """Execute the SQL migration script safely."""
+    sql_path = os.path.join("migrations", "ensure_schema.sql")
+    if not os.path.exists(sql_path):
+        logger.warning(f"Migration file {sql_path} not found, skipping.")
+        return
+    with open(sql_path, "r") as f:
+        sql_script = f.read()
+    # Use the async engine (or a sync engine if you prefer)
+    # We'll use the async engine because you already have it
+    async with engine.begin() as conn:
+        # Split by semicolons to execute multiple statements (simple approach)
+        for statement in sql_script.split(";"):
+            if statement.strip():
+                await conn.execute(text(statement))
+        logger.info("Database schema migration applied.")
 
 @app.on_event("startup")
 async def startup():
+    # Optionally run sync create_all (but the SQL already creates tables)
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(text("""
-            ALTER TABLE conversations  
-            ADD COLUMN IF NOT EXISTS service VARCHAR(100),
-            ADD COLUMN IF NOT EXISTS reply_mode VARCHAR(255),
-            ADD COLUMN IF NOT EXISTS reply_mode VARCHAR(20) DEFAULT 'ai',
-            ADD COLUMN IF NOT EXISTS assigned_agent_id UUID REFERENCES users(id) ON DELETE SET NULL;
-        """))
-    logger.info("Database tables initialized")
-    
+        await conn.run_sync(Base.metadata.create_all)  # still useful for SQLAlchemy metadata
+    await run_migration()  # <-- add this line
+    logger.info("Database tables initialized and schema up to date")
+        
 @app.on_event("shutdown")
 async def shutdown():
     await engine.dispose()
